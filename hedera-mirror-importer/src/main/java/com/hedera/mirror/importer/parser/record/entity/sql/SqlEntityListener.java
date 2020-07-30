@@ -57,6 +57,7 @@ import com.hedera.mirror.importer.parser.record.RecordStreamFileListener;
 import com.hedera.mirror.importer.parser.record.entity.ConditionOnEntityRecordParser;
 import com.hedera.mirror.importer.parser.record.entity.EntityListener;
 import com.hedera.mirror.importer.repository.RecordFileRepository;
+import com.hedera.mirror.importer.util.ShutdownHelper;
 
 @Log4j2
 @Named
@@ -162,6 +163,10 @@ public class SqlEntityListener implements EntityListener, RecordStreamFileListen
 
     @Override
     public void onError() {
+        rollback();
+    }
+
+    private void rollback() {
         try {
             if (connection != null) {
                 connection.rollback();
@@ -207,6 +212,12 @@ public class SqlEntityListener implements EntityListener, RecordStreamFileListen
     }
 
     private void executeBatches() {
+        if (ShutdownHelper.isStopping()) {
+            // handle shutdown of JVM during record file processing.
+            rollback();
+            return;
+        }
+
         try {
             Stopwatch stopwatch = Stopwatch.createStarted();
             transactionPgCopy.copy(transactions, connection);
